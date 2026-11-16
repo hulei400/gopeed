@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
@@ -22,9 +21,6 @@ Future<void> main(List<String> args) async {
     // Gopeed is not sandboxed. Configure each engine before the main/child
     // window split so native file and directory dialogs work in both windows.
     await FilePicker.skipEntitlementsChecks();
-  }
-  if (Util.isAndroid()) {
-    FlutterForegroundTask.initCommunicationPort();
   }
 
   final launchContext = AppWindowLaunchContext.fromArgs(args);

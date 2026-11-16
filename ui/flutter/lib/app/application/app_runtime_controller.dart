@@ -21,7 +21,6 @@ import '../../util/package_info.dart';
 import '../../util/util.dart';
 import '../rpc/webview_rpc_service.dart';
 import 'android_api_keep_alive.dart';
-import 'android_foreground_service.dart';
 import 'location_keep_alive.dart';
 import 'continued_processing.dart';
 
@@ -174,7 +173,6 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
         ..address = config.api.address
         ..apiToken = config.api.token;
     }
-    unawaited(_initAndroidForegroundService(appLocalizationsFor(config.extra.locale)));
     await _initAnalytics(config);
 
     final result = AppRuntimeState(
@@ -197,14 +195,6 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
       );
     }
     return result;
-  }
-
-  Future<void> _initAndroidForegroundService(AppLocalizations l10n) async {
-    try {
-      await AndroidForegroundService.ensureRunning(l10n);
-    } catch (error, stackTrace) {
-      logger.w('Android foreground service initialization failed', error, stackTrace);
-    }
   }
 
   Future<StartConfig> _loadStartConfig() async {

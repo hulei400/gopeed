@@ -21,11 +21,17 @@ import org.json.JSONObject
  * Native foreground service that keeps the Gopeed Go backend (and its API
  * server) alive after the app is swiped away from Recents.
  *
- * Unlike the flutter_foreground_task service, which only anchors the
- * process, this service owns the backend: every (re)start calls
+ * This is the app's only foreground service: every (re)start calls
  * [Libgopeed.start], and Go's rest.Start is idempotent, so a service
  * restart after a swipe-kill brings the API server back without any Dart
  * code running.
+ *
+ * The service runs as [ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE] on
+ * Android 14+, because the dataSync type is capped at 6 hours per 24 hours
+ * by the system — a cap the API server cannot live with (the first
+ * keep-alive build crashed in a loop once the inherited budget was
+ * exhausted). On older Android versions there is no such cap, so dataSync
+ * is used there.
  *
  * Start arguments (storage dir, notification title/text) are persisted in
  * SharedPreferences, because the system restarts a START_STICKY service
@@ -71,7 +77,13 @@ class GopeedApiService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun startForegroundCompat(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: specialUse has no daily time budget, unlike
+            // dataSync (6 h / 24 h). Fully qualified on purpose: an
+            // unqualified constant fails compileReleaseKotlin.
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Pre-14 has no dataSync time cap, so dataSync is fine here.
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             startForeground(NOTIFICATION_ID, notification)
