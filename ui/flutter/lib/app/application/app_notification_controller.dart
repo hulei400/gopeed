@@ -258,7 +258,7 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
       if (record != null && (record.status == TaskStatus.completed || record.status == TaskStatus.failed)) {
         continue;
       }
-      await _plugin.cancel(_taskNotificationIds[id]!);
+      await _plugin.cancel(id: _taskNotificationIds[id]!);
       _taskNotificationIds.remove(id);
     }
   }
