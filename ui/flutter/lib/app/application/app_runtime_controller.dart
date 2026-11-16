@@ -20,6 +20,7 @@ import '../../util/analytics.dart';
 import '../../util/package_info.dart';
 import '../../util/util.dart';
 import '../rpc/webview_rpc_service.dart';
+import 'android_api_keep_alive.dart';
 import 'android_foreground_service.dart';
 import 'location_keep_alive.dart';
 import 'continued_processing.dart';
@@ -54,6 +55,7 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
   static StartConfig? _defaultStartConfig;
   Future<void> _preferenceWrites = Future<void>.value();
   bool _analyticsStarted = false;
+  bool _androidApiKeepAliveDesired = false;
 
   @override
   Future<AppRuntimeState> build() async {
@@ -106,6 +108,7 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
         startupError: current.startupError,
       ),
     );
+    unawaited(_reconcileAndroidApiKeepAlive(apiEnabled: config.api.enable, extra: config.extra));
     unawaited(LocationKeepAliveCoordinator.instance.reconcile(enabled: config.extra.backgroundLocationKeepAlive));
     unawaited(ContinuedProcessing.setEnabled(config.extra.backgroundContinuedProcessing));
   }
@@ -181,6 +184,7 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
       localBackendStarted: localBackendStarted,
       startupError: startupError,
     );
+    unawaited(_reconcileAndroidApiKeepAlive(apiEnabled: config.api.enable, extra: config.extra));
     if (Util.isIOS()) {
       // Make sure the native Continued Processing manager has the
       // persisted setting before app initialization completes. This
@@ -389,6 +393,36 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
         startupError: current.startupError,
       ),
     );
+    unawaited(
+      _reconcileAndroidApiKeepAlive(apiEnabled: downloaderConfig.api.enable, extra: downloaderConfig.extra),
+    );
+  }
+
+  /// Keeps the native [GopeedApiService] in sync with the desired state: it
+  /// runs only while the API server is enabled and the keep-alive switch is
+  /// on. The native service re-starts the Go backend itself after the app
+  /// is swiped away, so the API server survives without any Dart code.
+  Future<void> _reconcileAndroidApiKeepAlive({required bool apiEnabled, required ExtraConfig extra}) async {
+    if (!Util.isAndroid()) return;
+    final desired = apiEnabled && extra.androidApiKeepAlive;
+    if (desired == _androidApiKeepAliveDesired) return;
+    _androidApiKeepAliveDesired = desired;
+    try {
+      if (desired) {
+        final l10n = appLocalizationsFor(extra.locale);
+        await AndroidApiKeepAlive.start(
+          storageDir: Util.getStorageDir(),
+          title: l10n.androidForegroundNotificationTitle,
+          text: l10n.androidForegroundNotificationText,
+        );
+      } else {
+        await AndroidApiKeepAlive.stop();
+      }
+    } catch (error, stackTrace) {
+      // Allow a later reconcile to retry.
+      _androidApiKeepAliveDesired = !desired;
+      logger.w('Android API keep-alive reconcile failed', error, stackTrace);
+    }
   }
 
   StartConfig _copyStartConfig(StartConfig config) {

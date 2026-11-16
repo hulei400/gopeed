@@ -209,6 +209,7 @@ class ExtraConfig {
   bool desktopNotification;
   bool backgroundLocationKeepAlive;
   bool backgroundContinuedProcessing;
+  bool androidApiKeepAlive;
   WindowStateConfig windowState;
   Map<String, String> bookmarks;
   List<String> createHistory;
@@ -229,6 +230,7 @@ class ExtraConfig {
     this.desktopNotification = true,
     this.backgroundLocationKeepAlive = false,
     this.backgroundContinuedProcessing = false,
+    this.androidApiKeepAlive = true,
     WindowStateConfig? windowState,
     this.bookmarks = const {},
     this.createHistory = const [],

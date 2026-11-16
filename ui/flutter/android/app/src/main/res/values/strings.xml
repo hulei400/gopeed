@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gopeed_api_keep_alive_channel">Gopeed is running</string>
+    <string name="gopeed_api_keep_alive_title">Gopeed is running</string>
+    <string name="gopeed_api_keep_alive_text">Downloads can continue in the background</string>
+</resources>

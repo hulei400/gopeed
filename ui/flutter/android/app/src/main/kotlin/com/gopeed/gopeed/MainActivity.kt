@@ -82,9 +82,40 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // Controls GopeedApiService, the native foreground service that keeps
+        // the Go backend and its API server alive after the app is swiped
+        // away from Recents.
+        val apiKeepAliveChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            API_KEEP_ALIVE_CHANNEL,
+        )
+        apiKeepAliveChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> {
+                    try {
+                        GopeedApiService.start(
+                            this,
+                            call.argument<String>("storageDir") ?: "",
+                            call.argument<String>("title") ?: "",
+                            call.argument<String>("text") ?: "",
+                        )
+                        result.success(null)
+                    } catch (error: Exception) {
+                        result.error("ERROR", error.message, null)
+                    }
+                }
+                "stop" -> {
+                    GopeedApiService.stop(this)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     private companion object {
         const val LIBGOPEED_CHANNEL = "gopeed.com/libgopeed"
+        const val API_KEEP_ALIVE_CHANNEL = "gopeed.com/api_keep_alive"
     }
 }

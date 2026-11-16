@@ -193,6 +193,7 @@ ExtraConfig _$ExtraConfigFromJson(Map<String, dynamic> json) => ExtraConfig(
   desktopNotification: json['desktopNotification'] as bool? ?? true,
   backgroundLocationKeepAlive: json['backgroundLocationKeepAlive'] as bool? ?? false,
   backgroundContinuedProcessing: json['backgroundContinuedProcessing'] as bool? ?? false,
+  androidApiKeepAlive: json['androidApiKeepAlive'] as bool? ?? true,
   windowState: json['windowState'] == null
       ? null
       : WindowStateConfig.fromJson(json['windowState'] as Map<String, dynamic>?),
@@ -214,6 +215,7 @@ Map<String, dynamic> _$ExtraConfigToJson(ExtraConfig instance) => <String, dynam
   'desktopNotification': instance.desktopNotification,
   'backgroundLocationKeepAlive': instance.backgroundLocationKeepAlive,
   'backgroundContinuedProcessing': instance.backgroundContinuedProcessing,
+  'androidApiKeepAlive': instance.androidApiKeepAlive,
   'windowState': instance.windowState.toJson(),
   'bookmarks': instance.bookmarks,
   'createHistory': instance.createHistory,

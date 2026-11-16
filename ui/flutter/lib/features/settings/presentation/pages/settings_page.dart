@@ -396,6 +396,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         onChanged: (value) => unawaited(_setBackgroundContinuedProcessing(value)),
                       ),
                     ),
+                  if (Util.isAndroid())
+                    SettingsItem(
+                      title: context.l10n.androidApiKeepAlive,
+                      subtitle: context.l10n.androidApiKeepAliveDescription,
+                      child: shad.Switch(
+                        value: config.extra.androidApiKeepAlive,
+                        onChanged: (value) => _mutateConfig((next) => next.extra.androidApiKeepAlive = value),
+                      ),
+                    ),
                 ],
               ),
             ),

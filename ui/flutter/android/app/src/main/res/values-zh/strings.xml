@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gopeed_api_keep_alive_channel">Gopeed 正在运行</string>
+    <string name="gopeed_api_keep_alive_title">Gopeed 正在运行</string>
+    <string name="gopeed_api_keep_alive_text">下载可在后台继续</string>
+</resources>
