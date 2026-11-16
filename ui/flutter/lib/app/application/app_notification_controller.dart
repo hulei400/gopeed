@@ -13,7 +13,6 @@ import '../../core/capabilities/app_capabilities.dart';
 import '../../core/common/task_event.dart';
 import '../../core/libgopeed_boot.dart';
 import '../../core/utils/file_explorer.dart';
-import '../../features/tasks/application/tasks_controller.dart';
 import '../../features/tasks/domain/task_record.dart';
 import '../../l10n/l10n.dart';
 import '../../util/log_util.dart';
@@ -32,17 +31,6 @@ const _openFolderAction = 'open_folder';
 // carry no buttons at all.
 const _categoryDoneSingleFile = 'taskDoneSingleFile';
 const _categoryDoneFolder = 'taskDoneFolder';
-
-// Android channel for download progress and completion notifications.
-// Separate from the keep-alive foreground-service channel so the user can
-// control download alerts independently in system settings.
-const _downloadChannelId = 'gopeed_downloads';
-
-// Per-task notification ids start here so they never collide with the
-// keep-alive foreground notification (1001). One id per task: the progress
-// notification and the final done/error notification share it, so the final
-// one replaces the progress bar instead of stacking a second notification.
-const _taskNotificationIdBase = 10000;
 
 /// A notification button resolved for one task event.
 ///
@@ -83,20 +71,7 @@ class AppNotificationState {
 class AppNotificationController extends AsyncNotifier<AppNotificationState> {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   StreamSubscription<TaskEvent>? _taskEventSubscription;
-  ProviderSubscription<AsyncValue<TasksState>>? _taskProgressSubscription;
-
-  /// Stable notification id per task id. Progress and done/error share it.
-  final Map<String, int> _taskNotificationIds = {};
-  var _nextTaskNotificationId = _taskNotificationIdBase;
-
-  /// Tasks whose done/error event already fired. Their progress notification
-  /// was replaced by the final one, so the task-list watcher must not cancel
-  /// it when the task leaves the downloading set.
-  final Set<String> _finalizedTaskIds = {};
-
-  int _notificationIdForTask(String taskId) {
-    return _taskNotificationIds.putIfAbsent(taskId, () => _nextTaskNotificationId++);
-  }
+  var _notificationId = 0;
 
   @visibleForTesting
   Stream<TaskEvent> get taskEvents => LibgopeedBoot.instance.taskEvents;
@@ -104,8 +79,6 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
   @override
   Future<AppNotificationState> build() async {
     final runtime = ref.watch(appRuntimeControllerProvider).value;
-    // Desktop and Android only: the notification UI (and the Android
-    // permission flow) is not wired up for iOS or web.
     if (runtime == null || kIsWeb || (!Util.isDesktop() && !Util.isAndroid())) {
       return const AppNotificationState();
     }
@@ -113,11 +86,18 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
       appLocalizationsFor(runtime.downloaderConfig.extra.locale),
       requestPermissions: runtime.downloaderConfig.extra.desktopNotification,
     );
+    if (!Util.isDesktop()) {
+      // Android: download notifications are posted natively by
+      // GopeedApiService, because they must survive the app being swiped
+      // away from Recents — the swipe kills the Flutter engine, so no Dart
+      // code runs afterwards. Dart only requests the POST_NOTIFICATIONS
+      // runtime grant here; the service has no Activity to ask with, and
+      // without the grant its notifications never show.
+      return const AppNotificationState();
+    }
     _listenTaskEvents();
-    _listenTaskProgress();
     ref.onDispose(() {
       unawaited(_taskEventSubscription?.cancel());
-      _taskProgressSubscription?.close();
     });
     return const AppNotificationState(started: true);
   }
@@ -198,7 +178,6 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
       final locale = appLocalizationsFor(runtime?.downloaderConfig.extra.locale ?? '');
       switch (event.type) {
         case TaskEventType.done:
-          _finalizedTaskIds.add(event.taskId);
           await _showNotification(
             locale: locale,
             title: locale.notificationTaskDone,
@@ -207,7 +186,6 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
             withActions: true,
           );
         case TaskEventType.error:
-          _finalizedTaskIds.add(event.taskId);
           // A failed download has no usable output to open, so no buttons.
           await _showNotification(
             locale: locale,
@@ -220,89 +198,6 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
     });
   }
 
-  /// Watches the (1s) task list for downloads in progress and keeps one
-  /// progress notification per top-level downloading task. Runs on Android
-  /// only: desktop shows progress in the app window instead.
-  void _listenTaskProgress() {
-    if (!Util.isAndroid()) return;
-    // build() can re-run when the runtime changes; drop the old listener
-    // first so a state change does not sync progress twice.
-    _taskProgressSubscription?.close();
-    _taskProgressSubscription = ref.listen(tasksControllerProvider, (previous, next) {
-      final state = next.value;
-      if (state == null) return;
-      unawaited(_syncProgressNotifications(state));
-    });
-  }
-
-  Future<void> _syncProgressNotifications(TasksState state) async {
-    final runtime = ref.read(appRuntimeControllerProvider).value;
-    if (runtime?.downloaderConfig.extra.desktopNotification == false) return;
-    final locale = appLocalizationsFor(runtime?.downloaderConfig.extra.locale ?? '');
-    final downloading = <String, TaskRecord>{};
-    for (final task in state.tasks) {
-      if (task.status == TaskStatus.downloading && !task.waiting) {
-        downloading[task.id] = task;
-      }
-    }
-    for (final task in downloading.values) {
-      await _showProgressNotification(locale: locale, task: task);
-    }
-    // Cancel progress for tasks that stopped without a done/error event
-    // (paused or deleted). Done/error are left alone: their event replaces
-    // the progress notification with the final one under the same id.
-    for (final id in _taskNotificationIds.keys.toList()) {
-      if (downloading.containsKey(id)) continue;
-      if (_finalizedTaskIds.contains(id)) continue;
-      final record = state.findTask(id);
-      if (record != null && (record.status == TaskStatus.completed || record.status == TaskStatus.failed)) {
-        continue;
-      }
-      await _plugin.cancel(id: _taskNotificationIds[id]!);
-      _taskNotificationIds.remove(id);
-    }
-  }
-
-  Future<void> _showProgressNotification({required AppLocalizations locale, required TaskRecord task}) async {
-    final percent = task.progress == null ? null : (task.progress! * 100).round().clamp(0, 100);
-    final details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        _downloadChannelId,
-        locale.downloadNotificationChannel,
-        channelDescription: locale.downloadNotificationChannelDescription,
-        importance: Importance.defaultImportance,
-        priority: Priority.low,
-        showProgress: true,
-        maxProgress: 100,
-        progress: percent ?? 0,
-        indeterminate: percent == null,
-        ongoing: true,
-        autoCancel: false,
-        onlyAlertOnce: true,
-        showWhen: true,
-      ),
-    );
-    await _plugin.show(
-      id: _notificationIdForTask(task.id),
-      title: task.name,
-      body: _progressBody(task),
-      notificationDetails: details,
-    );
-  }
-
-  String _progressBody(TaskRecord task) {
-    final parts = <String>[];
-    if (task.total != null && task.total!.isNotEmpty) {
-      parts.add('${task.downloaded} / ${task.total}');
-    } else {
-      parts.add(task.downloaded);
-    }
-    if (task.speed != null && task.speed!.isNotEmpty) {
-      parts.add(task.speed!);
-    }
-    return parts.join(' · ');
-  }
-
   Future<void> _showNotification({
     required AppLocalizations locale,
     required String title,
@@ -311,12 +206,7 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
     required bool withActions,
   }) async {
     final target = withActions ? await resolveTaskTarget(taskId) : null;
-    // The payload carries the path and whether it is a single file: on
-    // Android a plain tap on the notification opens the file directly, so
-    // the click handler needs both. Desktop readers ignore the extra field.
-    final payload = target == null
-        ? ''
-        : jsonEncode({'path': target.path, 'canOpenFile': target.canOpenFile});
+    final payload = target == null ? '' : jsonEncode({'path': target.path});
     final details = NotificationDetails(
       macOS: DarwinNotificationDetails(
         categoryIdentifier: switch (target) {
@@ -340,57 +230,8 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
             WindowsAction(content: locale.openFolder, arguments: NotificationActionSpec(id: _openFolderAction, path: target.path).encode()),
         ],
       ),
-      android: AndroidNotificationDetails(
-        _downloadChannelId,
-        locale.downloadNotificationChannel,
-        channelDescription: locale.downloadNotificationChannelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
-        autoCancel: true,
-        ongoing: false,
-        onlyAlertOnce: true,
-        // Android has no folder-reveal (FileExplorer.reveal is desktop-only),
-        // so only offer "open file", and only for single-file tasks.
-        actions: [
-          if (target != null && target.canOpenFile)
-            AndroidNotificationAction(_openFileAction, locale.openFile),
-        ],
-      ),
     );
-    // Same id as the progress notification for this task, so the final
-    // notification replaces the progress bar instead of stacking.
-    await _plugin.show(
-      id: _notificationIdForTask(taskId),
-      title: title,
-      body: body,
-      notificationDetails: details,
-      payload: payload,
-    );
-  }
-
-  /// Reads the file path out of a notification payload (`{'path': ...}`).
-  String? _payloadPath(String? payload) {
-    if (payload == null || payload.isEmpty) return null;
-    try {
-      final data = jsonDecode(payload);
-      final targetPath = data is Map<String, dynamic> ? data['path'] : null;
-      return targetPath is String ? targetPath : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Reads the `canOpenFile` flag out of a notification payload. Defaults
-  /// to true for payloads written before the flag existed.
-  bool _payloadCanOpenFile(String? payload) {
-    if (payload == null || payload.isEmpty) return true;
-    try {
-      final data = jsonDecode(payload);
-      final canOpen = data is Map<String, dynamic> ? data['canOpenFile'] : null;
-      return canOpen is bool ? canOpen : true;
-    } catch (_) {
-      return true;
-    }
+    await _plugin.show(id: _notificationId++, title: title, body: body, notificationDetails: details, payload: payload);
   }
 
   /// Resolves the download target a done task event points at, following the
@@ -427,19 +268,7 @@ class AppNotificationController extends AsyncNotifier<AppNotificationState> {
       }
     }
     if (spec == null) {
-      // Plain click on the notification body.
-      if (Util.isAndroid()) {
-        // Android: open the file directly (an APK goes to the package
-        // installer). The tap itself already brings the app forward, and
-        // there is no folder to reveal, so folder tasks do nothing here.
-        final targetPath = _payloadPath(response.payload);
-        if (targetPath != null && _payloadCanOpenFile(response.payload)) {
-          if (!await openTaskFile(targetPath)) {
-            logger.w('failed to open file from notification: $targetPath');
-          }
-        }
-        return;
-      }
+      // Plain click on the notification body: bring the app window back.
       await bringWindowToFront();
       return;
     }

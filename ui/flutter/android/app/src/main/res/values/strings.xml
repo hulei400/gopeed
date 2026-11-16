@@ -3,4 +3,12 @@
     <string name="gopeed_api_keep_alive_channel">Gopeed is running</string>
     <string name="gopeed_api_keep_alive_title">Gopeed is running</string>
     <string name="gopeed_api_keep_alive_text">Downloads can continue in the background</string>
+    <!-- Download notifications, posted natively by GopeedApiService so they
+         keep working after the app is swiped away. Wording matches the Dart
+         downloadNotificationChannel / notificationTaskDone / notificationTaskError
+         messages. -->
+    <string name="gopeed_downloads_channel">下载通知</string>
+    <string name="gopeed_downloads_channel_description">下载进度与完成通知</string>
+    <string name="download_notification_done">任务完成</string>
+    <string name="download_notification_error">任务失败</string>
 </resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Download directory (normally on external storage) plus the app's
+         private files/cache, so a completion notification can open the
+         downloaded file through FileProvider. -->
+    <external-path name="external" path="." />
+    <files-path name="files" path="." />
+    <cache-path name="cache" path="." />
+</paths>
