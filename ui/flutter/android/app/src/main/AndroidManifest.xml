@@ -16,6 +16,7 @@
     <application
         android:label="Gopeed"
         android:name="${applicationName}"
+        android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher">
