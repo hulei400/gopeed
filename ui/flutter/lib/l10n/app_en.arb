@@ -281,6 +281,8 @@
   "androidApiKeepAlive": "Keep API Alive in Background",
   "notificationTaskDone": "Task completed",
   "notificationTaskError": "Task error",
+  "downloadNotificationChannel": "Download notifications",
+  "downloadNotificationChannelDescription": "Download progress and completion notifications",
   "appTitle": "Gopeed Download Manager",
   "unsupportedWindowPayload": "Unsupported window request",
   "runtimeInitializationFailed": "Unable to initialize Gopeed runtime.\n{error}",

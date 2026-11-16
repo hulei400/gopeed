@@ -164,7 +164,7 @@ void main() {
     expect(notifications, hasLength(1));
     final platformSpecifics = notifications[0]['platformSpecifics'] as Map<dynamic, dynamic>;
     expect(platformSpecifics['categoryIdentifier'], 'taskDoneSingleFile');
-    expect(notifications[0]['payload'], '{"path":"/downloads/archive.zip"}');
+    expect(notifications[0]['payload'], '{"path":"/downloads/archive.zip","canOpenFile":true}');
   });
 
   test('a done folder task notification selects the folder category', () async {

@@ -249,6 +249,8 @@
   "androidApiKeepAlive": "後台保活",
   "notificationTaskDone": "任務完成",
   "notificationTaskError": "任務失敗",
+  "downloadNotificationChannel": "下載通知",
+  "downloadNotificationChannelDescription": "下載進度與完成通知",
   "appTitle": "Gopeed 下載管理器",
   "unsupportedWindowPayload": "不支援的視窗請求",
   "runtimeInitializationFailed": "無法初始化 Gopeed 執行環境。\n{error}",
