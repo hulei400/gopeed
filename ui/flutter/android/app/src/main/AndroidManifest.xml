@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Boot auto-start: lets BootReceiver start GopeedApiService after boot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="Gopeed"
@@ -116,6 +118,16 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Gopeed API server keep-alive" />
         </service>
+        <!-- Starts GopeedApiService after boot so the API server (and the
+             MCP endpoint) is up without opening the app. Exported: the
+             broadcast comes from the system, not from this app. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <!-- Shares downloaded files with the system (e.g. the package
              installer for APKs) when the user taps a completion
              notification. Used by GopeedApiService via FileProvider; the
